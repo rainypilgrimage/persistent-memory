@@ -85,6 +85,14 @@ If an agent cannot discover Skills automatically, add an equivalent instruction 
 | `recover <relative-path>` | Restores an archived or trashed file after confirmation. |
 | `memory health` | Proposes lifecycle actions; it never executes them automatically. |
 
+### Memory is not the whole project
+
+For active projects, Persistent Memory distinguishes stable memory, one current-status source, source materials, and route-only indexes.
+
+`update memory` updates reviewed stable memory. It does not automatically synchronize project status, source materials, or every index. When a request contains several kinds of change, the agent separates them and previews each destination before writing.
+
+Before claiming that a project is current or fully loaded, the agent checks the declared status source and any required live or first-party source.
+
 Lifecycle paths must be relative, such as `projects/old.md`. The skill rejects absolute paths, `..`, `_core/`, and control files. A path collision stops the operation before any file or index changes; it never overwrites a destination automatically.
 
 ## What Belongs in Memory
@@ -99,7 +107,7 @@ All memory is stored as local Markdown files. Do not put passwords, API keys, or
 
 ## Release Status
 
-v0.8.0 adds optional Summary-first loading for active on-demand files. It does not add section-level loading, automatic summary creation, or bulk migration.
+v0.8.1 is a reliability patch that clarifies the boundary between memory and project context. It does not add project-wide synchronization, background scanning or polling, automatic migration, or bulk migration.
 
 ## License
 
