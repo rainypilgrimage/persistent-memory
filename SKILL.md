@@ -7,7 +7,7 @@ description: Use when a user wants cross-session personal context shared by comp
 
 Persistent Memory is a transparent local context layer. It stores reviewed user context as Markdown files so compatible agents can read the same source of truth.
 
-**v0.8.0:** This release adds optional Summary-first loading for active on-demand files. It does not add section-level loading, automatic summary creation, or bulk migration.
+**v0.8.1:** This reliability patch defines project context ownership and freshness checks for current-state claims. It does not add automatic synchronization, directory migration, or live-source polling.
 
 ## Runtime Contract
 
@@ -36,7 +36,18 @@ Platform memory may coexist. Persistent Memory does not import historical chats 
     └── _trash/            # Recoverable deletion buffer
 ```
 
-Store stable context, decisions, concise project state, and pointers to source material. Keep raw repositories, downloads, media files, and datasets in their project workspaces; store a short description and path in memory instead.
+Store stable reviewed context, decisions, constraints, and pointers to canonical project status and source materials. Keep volatile operational state in one declared current-status source instead of copying it into memory files or indexes.
+
+## Project Context Ownership
+
+For active projects, distinguish four logical roles. Do not require a fixed directory layout:
+
+- **Stable memory:** reviewed background, decisions, constraints, durable results, and learned boundaries.
+- **Current status:** the single canonical source for the active phase, tasks, blockers, owners, and next actions.
+- **Materials:** first-party messages, meeting notes, repositories, datasets, and other source evidence.
+- **Index:** routing metadata that tells the agent what to load. It must not own volatile project facts.
+
+**One fact, one owner.** Memory may point to current status and materials, but must not duplicate frequently changing fields such as pull-request state, deadlines, or active blockers. If two files both claim to be the current-status source, stop and ask the user to choose or approve a migration.
 
 ## Loading
 
@@ -60,6 +71,18 @@ Trigger: the active conversation matches an entry in `_index.md`.
 2. Read those file(s).
 3. Use the information naturally.
 
+### Freshness Gate
+
+Before answering with a claim that means current, latest, completed, blocked, or no active task:
+
+1. Read the declared current-status source when one exists.
+2. Check its last-updated or last-verified date.
+3. Check declared first-party or live sources when the task depends on real-time facts.
+4. If a newer material or live source conflicts with the status snapshot, treat the newer authoritative source as evidence and do not repeat the old status as current.
+5. Briefly state the coverage or limitation when claiming current project state.
+
+Do not claim that project context is fully loaded when declared current-status or required first-party sources were not read.
+
 ### Summary-first on-demand loading
 
 For an active on-demand file selected through `_index.md`:
@@ -82,6 +105,17 @@ Trigger: `remember this`, `记住这个`, `save this`, `更新记忆`, `update m
 When a confirmed update to an active on-demand file changes a fact represented in its `## Summary` / `## 摘要`, include the exact summary revision in the same preview and obtain the same explicit user confirmation before writing. Do not automatically create a Summary for an existing file and do not bulk-migrate memory files.
 
 For a vague update request, list explicit facts and inferred patterns separately, then wait for the user to approve individual items.
+
+“Update memory” changes stable memory only. It does not automatically synchronize project status, source materials, or every routing file.
+
+When a request mixes project progress, new materials, durable decisions, and routing changes:
+
+1. Classify the proposed changes as stable memory, current status, materials, or index.
+2. Identify the canonical owner for each fact.
+3. Show the user the exact per-layer preview.
+4. Wait for confirmation before writing.
+
+Do not create duplicate current-status sources or copy volatile facts into `_index.md`.
 
 ### First Save
 
@@ -190,3 +224,6 @@ Read `_core/` and `_index.md`, then report active file count, approximate size, 
 5. Keep `_index.md` synchronized with active on-demand memory.
 6. Treat memory files as plain text; do not store passwords, API keys, or secrets.
 7. Do not promise automatic activation, cross-device sync, full-chat import, or full-context loading.
+8. Keep one canonical current-status source per active project.
+9. Keep indexes route-only; do not duplicate volatile project facts in them.
+10. Apply the Freshness Gate before making current-state claims.
