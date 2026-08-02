@@ -89,9 +89,11 @@ If an agent cannot discover Skills automatically, add an equivalent instruction 
 
 For active projects, Persistent Memory distinguishes stable memory, one current-status source, source materials, and route-only indexes.
 
-`update memory` updates reviewed stable memory. It does not automatically synchronize project status, source materials, or every index. When a request contains several kinds of change, the agent separates them and previews each destination before writing.
+`update memory` updates reviewed stable memory. It does not automatically synchronize project status, source materials, or every index. When a request contains several kinds of change, the agent separates them, previews each destination, and waits for explicit user confirmation before writing.
 
 Before claiming that a project is current or fully loaded, the agent checks the declared status source and any required live or first-party source.
+
+If a newer authoritative live or first-party source conflicts with an older status snapshot, the newer authoritative source governs any current-state claim.
 
 Lifecycle paths must be relative, such as `projects/old.md`. The skill rejects absolute paths, `..`, `_core/`, and control files. A path collision stops the operation before any file or index changes; it never overwrites a destination automatically.
 
