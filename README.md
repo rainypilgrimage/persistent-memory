@@ -99,7 +99,7 @@ Lifecycle paths must be relative, such as `projects/old.md`. The skill rejects a
 
 ## What Belongs in Memory
 
-Keep stable identity, preferences, decisions, concise project state, and pointers to source material here.
+Keep stable identity, preferences, stable reviewed project background, durable decisions, constraints, results, and pointers to canonical status and source materials here.
 
 Keep raw repositories, downloads, media files, and datasets in their original project workspaces. A memory note should point to them and explain why they matter; it should not become a general-purpose file warehouse.
 

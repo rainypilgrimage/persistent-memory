@@ -26,6 +26,23 @@ test("stale-source scenario routes current facts to a newer authoritative live s
   }
 });
 
+test("stale-source scenario exposes a newer conflicting first-party material", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "pm-alpha-"));
+  try {
+    await createSyntheticProject(root, "stale-source");
+    const status = await readFile(path.join(root, "workspace/alpha-status.md"), "utf8");
+    const material = await readFile(path.join(root, "workspace/team-update.md"), "utf8");
+    const statusDate = status.match(/last_verified: (\d{4}-\d{2}-\d{2})/)[1];
+    const materialDate = material.match(/source_date: (\d{4}-\d{2}-\d{2})/)[1];
+
+    assert.ok(materialDate > statusDate, "first-party material must be newer than the status snapshot");
+    assert.match(status, /Blocker: none recorded/);
+    assert.match(material, /Blocker: component certification is pending/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("duplicate-owner scenario contains two current-status owners", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "pm-alpha-"));
   try {

@@ -106,7 +106,7 @@ export async function createSyntheticProject(root, scenario) {
         "",
         "> source_date: 2026-01-02",
         "",
-        "- A new blocker exists.",
+        "- Blocker: component certification is pending",
         "",
       ].join("\n"),
     ),
