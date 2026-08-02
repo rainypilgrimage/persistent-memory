@@ -41,7 +41,27 @@ export async function createSyntheticProject(root, scenario) {
         "",
         "- Current status: workspace/alpha-status.md",
         "- Materials index: workspace/materials-index.md",
-        "- Live source: fictional://alpha-board",
+        "- Live source: workspace/alpha-live-source.md (fictional://alpha-board)",
+        "",
+      ].join("\n"),
+    ),
+  );
+
+  files.push(
+    await write(
+      root,
+      "workspace/alpha-live-source.md",
+      [
+        "# Fictional Project Alpha Live Source",
+        "",
+        "> source_route: fictional://alpha-board",
+        "> source_date: 2026-01-03",
+        "> authority: authoritative-current-status",
+        "",
+        "## Current Status Evidence",
+        "",
+        "- Blocker: external design approval is pending",
+        "- Precedence: This source supersedes workspace/alpha-status.md when newer.",
         "",
       ].join("\n"),
     ),

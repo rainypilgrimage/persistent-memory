@@ -5,14 +5,22 @@ import path from "node:path";
 import test from "node:test";
 import { createSyntheticProject } from "./helpers/create-synthetic-project.mjs";
 
-test("stale-source scenario contains a newer first-party material than the status snapshot", async () => {
+test("stale-source scenario routes current facts to a newer authoritative live source", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "pm-alpha-"));
   try {
     await createSyntheticProject(root, "stale-source");
+    const memory = await readFile(path.join(root, ".persistent-memory/projects/alpha.md"), "utf8");
     const status = await readFile(path.join(root, "workspace/alpha-status.md"), "utf8");
-    const material = await readFile(path.join(root, "workspace/team-update.md"), "utf8");
-    assert.match(status, /last_verified: 2026-01-01/);
-    assert.match(material, /source_date: 2026-01-02/);
+    const liveSource = await readFile(path.join(root, "workspace/alpha-live-source.md"), "utf8");
+    const statusDate = status.match(/last_verified: (\d{4}-\d{2}-\d{2})/)[1];
+    const liveSourceDate = liveSource.match(/source_date: (\d{4}-\d{2}-\d{2})/)[1];
+
+    assert.match(memory, /Live source: workspace\/alpha-live-source\.md \(fictional:\/\/alpha-board\)/);
+    assert.ok(liveSourceDate > statusDate, "live source must be newer than the status snapshot");
+    assert.match(liveSource, /source_route: fictional:\/\/alpha-board/);
+    assert.match(liveSource, /authority: authoritative-current-status/);
+    assert.match(liveSource, /Blocker: external design approval is pending/);
+    assert.match(liveSource, /supersedes workspace\/alpha-status\.md when newer/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
