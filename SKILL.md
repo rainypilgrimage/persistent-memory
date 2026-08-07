@@ -1,13 +1,13 @@
 ---
 name: persistent-memory
-description: Use when a user wants cross-session personal context shared by compatible AI agents, or asks to load, save, inspect, archive, recover, clean up, or upgrade local memory files.
+description: Use when a user wants cross-session personal context shared by compatible AI agents; asks to load, save, inspect, archive, recover, clean up, or upgrade local memory files; or asks to wrap up work and update relevant project context.
 ---
 
 # Persistent Memory System
 
 Persistent Memory is a transparent local context layer. It stores reviewed user context as Markdown files so compatible agents can read the same source of truth.
 
-**v0.8.1:** This reliability patch defines project context ownership and freshness checks for current-state claims. It does not add automatic synchronization, directory migration, or live-source polling.
+**v0.9.0:** This release coordinates project-context updates behind one user request while preserving explicit confirmation, one-fact/one-owner boundaries, and freshness checks. It does not add background synchronization, directory migration, or live-source polling.
 
 ## Runtime Contract
 
@@ -95,7 +95,7 @@ For an active on-demand file selected through `_index.md`:
 
 ## Saving
 
-Trigger: `remember this`, `记住这个`, `save this`, `更新记忆`, `update memory`, `update my profile`, or `add to notes`.
+Trigger: `remember this`, `记住这个`, `save this`, `更新记忆`, `update memory`, `update project context`, `wrap this up`, `update what needs updating`, `update my profile`, or `add to notes`.
 
 1. Read the target file first if it already exists.
 2. Propose the exact content, destination, and index change.
@@ -104,16 +104,22 @@ Trigger: `remember this`, `记住这个`, `save this`, `更新记忆`, `update m
 
 When a confirmed update to an active on-demand file changes a fact represented in its `## Summary` / `## 摘要`, include the exact summary revision in the same preview and obtain the same explicit user confirmation before writing. Do not automatically create a Summary for an existing file and do not bulk-migrate memory files.
 
-For a vague update request, list explicit facts and inferred patterns separately, then wait for the user to approve individual items.
+### Coordinated Project Context Update
 
-“Update memory” changes stable memory only. It does not automatically synchronize project status, source materials, or every routing file.
+Treat broad requests such as “update memory,” “update project context,” “wrap this up,” or “update what needs updating” as one coordinated project-context update. Do not require the user to choose among stable memory, current status, materials, or index.
 
-When a request mixes project progress, new materials, durable decisions, and routing changes:
+Inspect the current conversation and declared relevant sources. This workflow does not add background scanning, live polling, bulk migration, destructive lifecycle actions, or unconfirmed writes.
 
-1. Classify the proposed changes as stable memory, current status, materials, or index.
-2. Identify the canonical owner for each fact.
-3. Show the user the exact per-layer preview.
-4. Wait for confirmation before writing.
+1. Collect candidate changes from confirmed conversation facts and the declared sources needed for the active topic.
+2. Classify the proposed changes as stable memory, current status, materials, or index.
+3. Identify the canonical owner for each fact.
+4. Route confirmed phase, task, blocker, owner, and next-action changes to the single current-status source. Route durable reviewed decisions, constraints, results, and learned boundaries to stable memory. Register first-party artifacts as material pointers instead of copying raw artifacts into memory. Change the index only when routing changes.
+5. Skip transient discussion, duplicates, unsupported inferences, rejected options, obsolete facts, and layers with no necessary change.
+   If no candidate remains after filtering, report that no update is needed and do not request confirmation.
+6. Show one consolidated preview containing only the layers that need changes, with the exact destination and content for each change. Include concise skip reasons only when omission could surprise the user.
+7. Request one confirmation for the complete non-destructive write set, then apply only the confirmed changes and verify cross-file consistency.
+
+Ask a targeted question only when facts conflict, ownership is ambiguous, or a new source's authority cannot be determined. Keep explicit scope overrides available: “Only update stable memory,” “only update status,” and “only register materials.”
 
 Do not create duplicate current-status sources or copy volatile facts into `_index.md`.
 
@@ -227,3 +233,5 @@ Read `_core/` and `_index.md`, then report active file count, approximate size, 
 8. Keep one canonical current-status source per active project.
 9. Keep indexes route-only; do not duplicate volatile project facts in them.
 10. Apply the Freshness Gate before making current-state claims.
+11. Treat broad update intent as one coordinated project-context update; do not make the user choose the internal storage layer.
+12. Bundle non-destructive context changes into one preview and one confirmation.

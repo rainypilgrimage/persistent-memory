@@ -21,9 +21,9 @@ function assertRequirements(content, requirements, label) {
   }
 }
 
-test("English skill defines project context ownership and freshness", async () => {
+test("English skill defines project context ownership, freshness, and coordinated updates", async () => {
   const skill = await readRepoFile("SKILL.md");
-  assert.match(skill, /\*\*v0\.8\.1:\*\*/);
+  assert.match(skill, /\*\*v0\.9\.0:\*\*/);
   const ownership = section(skill, "Project Context Ownership");
   const freshness = section(skill, "Freshness Gate", 3);
   const saving = section(skill, "Saving");
@@ -47,24 +47,34 @@ test("English skill defines project context ownership and freshness", async () =
     ["incomplete-source coverage limit", /Do not claim that project context is fully loaded when declared current-status or required first-party sources were not read/i],
   ], "English Freshness Gate");
   assertRequirements(saving, [
-    ["stable-only update-memory boundary", /[“\"]Update memory[”\"].*changes stable memory only.*does not automatically synchronize project status, source materials, or every routing file/is],
+    ["broad coordinated update intent", /Treat broad requests such as [“\"]update memory,[”\"] [“\"]update project context,[”\"] [“\"]wrap this up,[”\"] or [“\"]update what needs updating[”\"] as one coordinated project-context update/is],
+    ["internal rather than user classification", /Do not require the user to choose among stable memory, current status, materials, or index/is],
+    ["conversation and declared-source scope", /Inspect the current conversation and declared relevant sources/i],
     ["four-layer classification", /Classify the proposed changes as stable memory, current status, materials, or index/i],
     ["canonical owner identification", /Identify the canonical owner for each fact/i],
-    ["exact per-layer preview", /Show the user the exact per-layer preview/i],
-    ["explicit confirmation before writing", /Wait for confirmation before writing/i],
+    ["candidate filtering", /Skip transient discussion, duplicates, unsupported inferences, rejected options, obsolete facts, and layers with no necessary change/i],
+    ["zero-change outcome", /If no candidate remains after filtering, report that no update is needed and do not request confirmation/i],
+    ["single consolidated preview", /Show one consolidated preview.*only the layers that need changes.*exact destination and content/is],
+    ["single confirmation before writing", /Request one confirmation for the complete non-destructive write set/is],
+    ["targeted questions only for unresolved ownership", /Ask a targeted question only when facts conflict, ownership is ambiguous, or a new source's authority cannot be determined/is],
+    ["optional narrow overrides", /Only update stable memory.*only update status.*only register materials/is],
+    ["no automatic background synchronization", /does not add background scanning, live polling, bulk migration, destructive lifecycle actions, or unconfirmed writes/is],
     ["no duplicate status or volatile index facts", /Do not create duplicate current-status sources or copy volatile facts into `_index\.md`/i],
   ], "English Saving section");
   assertRequirements(coreRules, [
     ["Core Rule 8", /^8\. Keep one canonical current-status source per active project\.$/m],
     ["Core Rule 9", /^9\. Keep indexes route-only; do not duplicate volatile project facts in them\.$/m],
     ["Core Rule 10", /^10\. Apply the Freshness Gate before making current-state claims\.$/m],
+    ["Core Rule 11", /^11\. Treat broad update intent as one coordinated project-context update; do not make the user choose the internal storage layer\.$/m],
+    ["Core Rule 12", /^12\. Bundle non-destructive context changes into one preview and one confirmation\.$/m],
   ], "English Core Rules");
   assert.doesNotMatch(skill, /Store stable context, decisions, concise project state/);
+  assert.doesNotMatch(skill, /[“\"]Update memory[”\"].*changes stable memory only/is);
 });
 
-test("Chinese skill defines equivalent project context ownership and freshness", async () => {
+test("Chinese skill defines equivalent ownership, freshness, and coordinated updates", async () => {
   const skill = await readRepoFile("SKILL_zh.md");
-  assert.match(skill, /\*\*v0\.8\.1：\*\*/);
+  assert.match(skill, /\*\*v0\.9\.0：\*\*/);
   const ownership = section(skill, "项目上下文所有权");
   const freshness = section(skill, "新鲜度闸门", 3);
   const saving = section(skill, "保存");
@@ -88,29 +98,43 @@ test("Chinese skill defines equivalent project context ownership and freshness",
     ["来源未读时的覆盖限制", /没有读取已声明的当前状态源或必要一手来源时，不得声称项目上下文已经完整加载/],
   ], "中文新鲜度闸门");
   assertRequirements(saving, [
-    ["更新记忆仅限稳定层", /“更新记忆”只修改稳定记忆，不会自动同步项目状态、来源材料或全部路由文件/],
+    ["宽泛更新意图触发协调更新", /将“更新记忆”“更新项目上下文”“帮我收尾”或“把该更新的处理好”等宽泛请求视为一次协调式项目上下文更新/],
+    ["内部分类而非要求用户分类", /不得要求用户先在稳定记忆、当前状态、材料和索引之间做选择/],
+    ["仅检查本轮对话与已声明来源", /检查本轮对话和已声明的相关来源/],
     ["四层分类", /将拟修改内容分类为稳定记忆、当前状态、材料或索引/],
     ["确定唯一所有者", /为每项事实确定唯一所有者/],
-    ["按层精确预览", /展示按层拆分的精确预览/],
-    ["写入前明确确认", /等待用户确认后再写入/],
+    ["过滤无须写入内容", /跳过临时讨论、重复内容、无证据推断、已否决方案、过时事实和无需修改的层/],
+    ["零改动结果", /如果过滤后没有候选变化，说明无需更新，不请求确认/],
+    ["一次合并预览", /只展示一份合并预览.*仅包含需要修改的层.*准确目标和内容/s],
+    ["一次确认", /针对完整的非破坏性写入集合只请求一次确认/],
+    ["仅在无法裁决时定向提问", /只有在事实冲突、所有权不明确或无法判断新来源的权威性时，才提出一个针对性问题/],
+    ["可选精确范围", /只更新稳定记忆.*只更新状态.*只登记材料/s],
+    ["不做后台自动同步", /不会引入后台扫描、实时轮询、批量迁移、破坏性生命周期操作或未经确认的写入/],
     ["不重复状态、不写易变索引", /不得创建重复的当前状态源，也不得把易变事实复制进 `_index\.md`/],
   ], "中文保存章节");
   assertRequirements(coreRules, [
     ["核心规则 8", /^8\. 每个活跃项目只保留一个权威当前状态源。$/m],
     ["核心规则 9", /^9\. 索引只负责路由，不复制高频变化的项目事实。$/m],
     ["核心规则 10", /^10\. 声称当前状态前必须执行新鲜度闸门。$/m],
+    ["核心规则 11", /^11\. 将宽泛更新意图视为一次协调式项目上下文更新，不让用户选择内部存储层。$/m],
+    ["核心规则 12", /^12\. 将非破坏性上下文改动合并为一次预览和一次确认。$/m],
   ], "中文核心规则");
+  assert.doesNotMatch(skill, /“更新记忆”只修改稳定记忆/);
 });
 
-test("READMEs explain that update memory is not project-wide synchronization", async () => {
+test("READMEs explain coordinated updates without promising automatic synchronization", async () => {
   const english = await readRepoFile("README.md");
   const chinese = await readRepoFile("README_zh.md");
-  assert.match(english, /v0\.8\.1/);
-  assert.match(chinese, /v0\.8\.1/);
-  assert.match(english, /update memory.*stable memory/is);
-  assert.match(english, /does not automatically synchronize/is);
-  assert.match(chinese, /更新记忆.*稳定记忆/s);
-  assert.match(chinese, /不会自动同步/s);
+  assert.match(english, /v0\.9\.0/);
+  assert.match(chinese, /v0\.9\.0/);
+  assert.match(english, /update memory.*coordinated project-context update/is);
+  assert.match(english, /one consolidated preview.*one confirmation/is);
+  assert.match(english, /If nothing remains after filtering.*no confirmation/i);
+  assert.match(english, /does not run in the background.*declared relevant sources/is);
+  assert.match(chinese, /更新记忆.*协调式项目上下文更新/s);
+  assert.match(chinese, /一次合并预览.*一次确认/s);
+  assert.match(chinese, /如果过滤后没有内容需要修改.*不请求确认/);
+  assert.match(chinese, /不会在后台运行.*已声明的相关来源/s);
 });
 
 test("READMEs assign only stable reviewed project background to memory", async () => {
