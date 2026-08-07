@@ -10,6 +10,7 @@ It complements platform memory; it does not replace it, import your old chats, o
 
 - **Loads baseline context** — `load memory` reads your core files and index, not every project file.
 - **Saves with review** — the AI proposes the content and destination; you approve before it writes.
+- **Coordinates wrap-up updates** — one request lets the agent decide which project-context layers actually need changes.
 - **Loads details on demand** — relevant project or note files are read only when the topic needs them.
 - **Uses optional Summary-first loading** — for an active file with a reviewed `## Summary`, the agent reads the short summary first and opens the full file only when the request needs more detail. Files without a summary keep the existing behavior.
 - **Manages lifecycle safely** — archive, trash, recovery, and memory health are confirmation-based.
@@ -77,7 +78,7 @@ If an agent cannot discover Skills automatically, add an equivalent instruction 
 |---|---|
 | `load memory` | Loads baseline context: core files and the active index. |
 | `remember this` / `save this` | Proposes a reviewed memory update. |
-| `update memory` | Separates proposed facts and inferred patterns for approval. |
+| `update memory` / `update project context` / `wrap this up` | Coordinates the necessary project-context changes behind one preview and confirmation. |
 | `memory status` | Lists active memory structure and summaries. |
 | `memory upgrade` | Previews and, after confirmation, creates missing lifecycle folders for an older memory root. |
 | `archive <relative-path>` | Moves a completed low-frequency active file to archive after confirmation. |
@@ -89,7 +90,13 @@ If an agent cannot discover Skills automatically, add an equivalent instruction 
 
 For active projects, Persistent Memory distinguishes stable memory, one current-status source, source materials, and route-only indexes.
 
-`update memory` updates reviewed stable memory. It does not automatically synchronize project status, source materials, or every index. When a request contains several kinds of change, the agent separates them, previews each destination, and waits for explicit user confirmation before writing.
+`update memory` is a coordinated project-context update by default. The agent decides internally whether confirmed changes belong to stable memory, the canonical current-status source, material pointers, or a route-only index. It skips transient discussion, duplicates, unsupported inference, rejected options, obsolete facts, and layers with no necessary change.
+
+The agent shows one consolidated preview with exact destinations and requests one confirmation for the complete non-destructive write set. Use `only update stable memory`, `only update status`, or `only register materials` when you want to restrict the scope explicitly.
+
+If nothing remains after filtering, the agent reports that no update is needed and requests no confirmation.
+
+This coordination does not run in the background. It uses the current conversation and declared relevant sources; it does not scan every workspace, poll live systems, bulk-migrate files, or write without confirmation.
 
 Before claiming that a project is current or fully loaded, the agent checks the declared status source and any required live or first-party source.
 
@@ -105,11 +112,11 @@ Keep raw repositories, downloads, media files, and datasets in their original pr
 
 ## Privacy
 
-All memory is stored as local Markdown files. Do not put passwords, API keys, or secrets in it. The v0.8 lifecycle and summary rules protect core files and require explicit confirmation before filesystem changes.
+All memory is stored as local Markdown files. Do not put passwords, API keys, or secrets in it. Lifecycle, summary, and coordinated-update rules protect core files and require explicit confirmation before filesystem changes.
 
 ## Release Status
 
-v0.8.1 is a reliability patch that clarifies the boundary between memory and project context. It does not add project-wide synchronization, background scanning or polling, automatic migration, or bulk migration.
+v0.9.0 adds one-request coordinated project-context updates. It preserves v0.8.1 ownership and freshness safeguards and does not add background synchronization, scanning or polling, automatic migration, or bulk migration.
 
 ## License
 
