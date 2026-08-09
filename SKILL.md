@@ -7,7 +7,7 @@ description: Use when a user wants cross-session personal context shared by comp
 
 Persistent Memory is a transparent local context layer. It stores reviewed user context as Markdown files so compatible agents can read the same source of truth.
 
-**v0.9.0:** This release coordinates project-context updates behind one user request while preserving explicit confirmation, one-fact/one-owner boundaries, and freshness checks. It does not add background synchronization, directory migration, or live-source polling.
+**v0.9.1:** This release coordinates project-context updates behind one user request, adds compact current-status output and safe context-coverage receipts, and preserves explicit confirmation, one-fact/one-owner boundaries, and freshness checks. It does not add background synchronization, directory migration, or live-source polling.
 
 ## Runtime Contract
 
@@ -49,6 +49,8 @@ For active projects, distinguish four logical roles. Do not require a fixed dire
 
 **One fact, one owner.** Memory may point to current status and materials, but must not duplicate frequently changing fields such as pull-request state, deadlines, or active blockers. If two files both claim to be the current-status source, stop and ask the user to choose or approve a migration.
 
+Keep the current-status source as a compact working set, not a progress log. Retain only the facts needed to understand the active phase or objective, active work, blockers, owners, next actions, and verification time. Replace superseded status values instead of appending history. Route completed-task history and process narrative to materials; keep raw evidence in its first-party material and register only a material pointer instead of copying raw artifacts into memory; route durable reviewed outcomes to stable memory.
+
 ## Loading
 
 ### Load Baseline Context
@@ -80,6 +82,30 @@ Before answering with a claim that means current, latest, completed, blocked, or
 3. Check declared first-party or live sources when the task depends on real-time facts.
 4. If a newer material or live source conflicts with the status snapshot, treat the newer authoritative source as evidence and do not repeat the old status as current.
 5. Briefly state the coverage or limitation when claiming current project state.
+
+After a current-state answer, add one concise `Context coverage:` line. Every current-state answer must end with exactly one standalone line that starts with `Context coverage:`. Do not fold this coverage into the answer body. Name the current-status source and any required live or first-party sources actually checked. Use concise source labels or relative paths, for example: `Context coverage: read <status source>; checked <live or first-party source>.` Use only declared safe aliases or relative paths; redact or generalize sensitive filenames, project names, usernames, identifiers, repository URLs, hashes, and absolute paths. If no safe alias exists, use a generic source label. Mention only declared relevant sources that were not read and could change the answer. Do not enumerate unrelated files, the whole memory root, or unnecessary absolute paths. Omit this receipt for answers that do not depend on current project state.
+
+Use minimum sufficient state in the answer: include only the fields requested or required to answer. Do not replay the whole current-status source unless the user explicitly asks for a full or detailed status. When a live source supports scoped queries or filters, retrieve only the relevant project, workstream, and fields.
+
+A full or detailed status may expand current fields, but must not automatically include historical logs, process narrative, or raw evidence unless explicitly requested.
+
+For a full or detailed status, format only the requested current fields and necessary freshness evidence; do not add an `Additional context`, `History`, or `Status notes` section unless explicitly requested.
+
+For a detailed current-status request, unless history or evidence is explicitly requested, use requested and available fields in this order: Phase, Active objective, Active tasks, Blocker, Owner, Next action. Always put `Context coverage:` last. Omit fields not requested or unavailable instead of inventing them, and put freshness or source detail only in the `Context coverage:` line.
+
+Hard output contract for detailed current-status requests applies only when the request is directly answerable from resolved, read sources. If a required source is unread, sources conflict, or ownership is ambiguous, state the limitation or ask one targeted clarifying question instead of forcing the template. For a directly answerable detailed current-status request, output only the requested available fields in that order plus exactly one `Context coverage:` line. Do not add any other heading, paragraph, note, or historical item.
+
+Use this field order and line shape for detailed current status; include only requested and available fields:
+
+```text
+- Phase: <value>
+- Active objective: <value>
+- Active tasks: <value>
+- Blocker: <value>
+- Owner: <value>
+- Next action: <value>
+Context coverage: <sources>
+```
 
 Do not claim that project context is fully loaded when declared current-status or required first-party sources were not read.
 

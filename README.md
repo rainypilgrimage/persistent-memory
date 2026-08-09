@@ -90,6 +90,18 @@ If an agent cannot discover Skills automatically, add an equivalent instruction 
 
 For active projects, Persistent Memory distinguishes stable memory, one current-status source, source materials, and route-only indexes.
 
+The current-status source stays a compact working set, not a progress log. Superseded values are replaced instead of accumulated; completed-task history and process narrative remain in materials, raw evidence stays in its first-party material and is represented by a pointer, while durable reviewed outcomes belong in stable memory. Current-state answers use minimum sufficient state and include only the fields needed for the request. The agent replays the full source only when you ask for a full or detailed status.
+
+Even a full or detailed status expands current fields only; it does not automatically include historical logs, process narrative, or raw evidence unless you ask for them.
+
+Format a full or detailed status as the requested current fields plus necessary freshness evidence; do not add an `Additional context`, `History`, or `Status notes` section unless requested.
+
+For detailed current status, use requested and available fields in this order unless history or evidence is explicitly requested: Phase, Active objective, Active tasks, Blocker, Owner, Next action. Always put `Context coverage:` last; omit fields not requested or unavailable and keep freshness or source detail in the coverage line.
+
+The hard output contract applies only when the detailed status is directly answerable from resolved, read sources. If a required source is unread, sources conflict, or ownership is ambiguous, state the limitation or ask one targeted clarifying question instead of forcing the template. For a directly answerable status, do not add any other heading, paragraph, note, or historical item; beyond requested field values, include only one `Context coverage:` line.
+
+Use the field order and line shape shown in the Skill, including only requested and available fields.
+
 `update memory` is a coordinated project-context update by default. The agent decides internally whether confirmed changes belong to stable memory, the canonical current-status source, material pointers, or a route-only index. It skips transient discussion, duplicates, unsupported inference, rejected options, obsolete facts, and layers with no necessary change.
 
 The agent shows one consolidated preview with exact destinations and requests one confirmation for the complete non-destructive write set. Use `only update stable memory`, `only update status`, or `only register materials` when you want to restrict the scope explicitly.
@@ -101,6 +113,8 @@ This coordination does not run in the background. It uses the current conversati
 Before claiming that a project is current or fully loaded, the agent checks the declared status source and any required live or first-party source.
 
 If a newer authoritative live or first-party source conflicts with an older status snapshot, the newer authoritative source governs any current-state claim.
+
+For a current-state answer, the agent adds `Context coverage:` as one concise line naming the status source and any required live or first-party sources actually checked. It uses declared safe aliases or relative paths, redacts or generalizes sensitive filenames, project names, usernames, identifiers, repository URLs, hashes, and absolute paths, and uses a generic source label when no safe alias exists. It mentions only relevant unread sources that could change the conclusion and does not enumerate unrelated files, the whole memory root, or unnecessary absolute paths. Ordinary answers omit the receipt.
 
 Lifecycle paths must be relative, such as `projects/old.md`. The skill rejects absolute paths, `..`, `_core/`, and control files. A path collision stops the operation before any file or index changes; it never overwrites a destination automatically.
 
@@ -116,7 +130,7 @@ All memory is stored as local Markdown files. Do not put passwords, API keys, or
 
 ## Release Status
 
-v0.9.0 adds one-request coordinated project-context updates. It preserves v0.8.1 ownership and freshness safeguards and does not add background synchronization, scanning or polling, automatic migration, or bulk migration.
+v0.9.1 adds compact current-status output, context-coverage receipts, and safe source-label redaction. It preserves v0.9.0 coordinated project-context updates and v0.8.1 ownership and freshness safeguards; it does not add background synchronization, scanning or polling, automatic migration, or bulk migration.
 
 ## License
 
