@@ -2,6 +2,9 @@
   "name": "persistent-memory-skill",
   "private": true,
   "type": "module",
+  "bin": {
+    "memory": "bin/memory"
+  },
   "scripts": {
     "test": "node --test tests/*.test.mjs"
   }

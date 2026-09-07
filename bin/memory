@@ -1,0 +1,574 @@
+#!/usr/bin/env node
+// Reference implementation of the lifecycle safety contract.
+// The skill remains an instruction set; when this CLI is installed, agents SHOULD use it
+// for validation and lifecycle mutations so path safety and atomicity do not depend on the model.
+
+import { access, mkdir, readFile, readdir, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+
+const ROOT = process.env.PERSISTENT_MEMORY_HOME
+  ? path.resolve(process.env.PERSISTENT_MEMORY_HOME)
+  : path.join(os.homedir(), ".persistent-memory");
+
+const ACTIVE_ZONES = ["projects", "notes"];
+
+function usage() {
+  return [
+    "Usage: memory <command> [args] [--yes]",
+    "",
+    "Commands:",
+    "  upgrade                    Create missing lifecycle structure (non-destructive).",
+    "  status                     Report active memory from _index.md and _core/.",
+    "  validate <relative-path>   Check that a lifecycle path passes the safety contract.",
+    "  archive <relative-path> --reason <text> [--yes]   Move an active file to _archive/.",
+    "  delete  <relative-path> [--yes]                   Move an archived file to the 30-day trash.",
+    "  recover <relative-path> [--yes]                   Restore an archived or trashed file.",
+    "  health  [--max-age-days N]                        List lifecycle and expiry candidates (no changes).",
+    "",
+    "All mutating commands preview first and only change files when --yes is present.",
+    "Override the memory root with PERSISTENT_MEMORY_HOME.",
+  ].join("\n");
+}
+
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function addDays(dateStr, days) {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function isInside(parent, child) {
+  return child === parent || child.startsWith(parent + path.sep);
+}
+
+function normalizeRel(input) {
+  let p = String(input).trim();
+  while (p.startsWith("./")) p = p.slice(2);
+  p = p.replace(/\/+/g, "/").replace(/\/$/, "");
+  return p;
+}
+
+function assertUserRel(input) {
+  const rel = normalizeRel(input);
+  if (!rel) throw new Error("empty path");
+  if (path.isAbsolute(rel)) throw new Error(`absolute path rejected: ${input}`);
+  if (rel.startsWith("~") || rel.includes("\\") || rel.includes("\0")) {
+    throw new Error(`absolute or home path rejected: ${input}`);
+  }
+  if (/^[A-Za-z]:/.test(rel)) throw new Error(`drive path rejected: ${input}`);
+  const segs = rel.split("/").filter(Boolean);
+  if (segs.length === 0) throw new Error(`empty path: ${input}`);
+  if (segs.some((s) => s === "..")) throw new Error(`parent traversal rejected: ${input}`);
+  if (segs[0] === "_core" || segs[0] === "_archive") throw new Error(`protected path rejected: ${input}`);
+  if (segs.some((s) => s.startsWith("."))) throw new Error(`hidden path rejected: ${input}`);
+  return rel;
+}
+
+async function realRoot() {
+  try {
+    return await realpath(ROOT);
+  } catch {
+    return ROOT;
+  }
+}
+
+// Resolve a path and prove it stays inside the real memory root, following symlinks.
+async function resolveContained(rel) {
+  const real = await realRoot();
+  const abs = path.resolve(real, rel);
+  if (!isInside(real, abs)) throw new Error(`path escapes memory root: ${rel}`);
+
+  // A symlinked file or directory could point outside the root.
+  const parent = path.dirname(abs);
+  let realParent = parent;
+  try {
+    realParent = await realpath(parent);
+  } catch {}
+  if (!isInside(real, realParent)) throw new Error(`symlink escapes memory root: ${rel}`);
+  let resolved;
+  try {
+    resolved = await realpath(abs);
+  } catch (err) {
+    if (err.code !== "ENOENT" && err.code !== "ENOTDIR") throw err;
+    resolved = abs;
+  }
+  if (!isInside(real, resolved)) throw new Error(`symlink escapes memory root: ${rel}`);
+  return abs;
+}
+
+async function mustExist(file) {
+  try {
+    await access(file);
+  } catch {
+    throw new Error(`source does not exist: ${file}`);
+  }
+}
+
+async function atomicWrite(file, content) {
+  const dir = path.dirname(file);
+  await mkdir(dir, { recursive: true });
+  const tmp = path.join(dir, `.${path.basename(file)}.${process.pid}.${Date.now()}.tmp`);
+  try {
+    await writeFile(tmp, content, "utf8");
+    await rename(tmp, file);
+  } catch (err) {
+    await rm(tmp, { force: true }).catch(() => {});
+    throw err;
+  }
+}
+
+async function readIndex() {
+  const file = path.join(ROOT, "_index.md");
+  try {
+    return await readFile(file, "utf8");
+  } catch {
+    return "";
+  }
+}
+
+function indexLines(text) {
+  return text
+    .split("\n")
+    .filter((line) => line.trim().startsWith("- ") && line.includes("—"));
+}
+
+function activeIndexLine(text, rel) {
+  return indexLines(text).find((line) => line.includes(rel)) ?? null;
+}
+
+function removeRoutes(text, rel) {
+  const kept = text.split("\n").filter((line) => !(line.trim().startsWith("- ") && line.includes(rel)));
+  return kept.join("\n");
+}
+
+async function readArchiveIndex() {
+  const file = path.join(ROOT, "_archive", "_index.md");
+  try {
+    return await readFile(file, "utf8");
+  } catch {
+    return "";
+  }
+}
+
+function parseArchiveIndex(text) {
+  const lines = text.split("\n");
+  const preamble = [];
+  const blocks = [];
+  let current = null;
+  for (const line of lines) {
+    if (line.startsWith("### ")) {
+      current = { heading: line.slice(4).trim(), body: [] };
+      blocks.push(current);
+    } else if (current) {
+      current.body.push(line);
+    } else {
+      preamble.push(line);
+    }
+  }
+  return { preamble, blocks };
+}
+
+function field(block, name) {
+  const line = block.body.find((l) => l.startsWith(`- ${name}: `));
+  if (!line) return null;
+  return line.slice(`- ${name}: `.length).trim();
+}
+
+function blockToLines(block) {
+  return [`### ${block.heading}`, ...block.body];
+}
+
+function serializeArchiveIndex(parsed) {
+  return [
+    ...parsed.preamble.filter(Boolean),
+    ...parsed.blocks.flatMap(blockToLines),
+    "",
+  ].join("\n");
+}
+
+function findArchiveBlock(text, rel) {
+  const parsed = parseArchiveIndex(text);
+  const index = parsed.blocks.findIndex((b) => field(b, "original_path") === rel);
+  return index === -1 ? { parsed, index: -1, block: null } : { parsed, index, block: parsed.blocks[index] };
+}
+
+async function ensureLifecycle() {
+  for (const dir of ["_core", "projects", "notes", "_archive", "_archive/_trash"]) {
+    await mkdir(path.join(ROOT, dir), { recursive: true });
+  }
+  for (const file of ["_index.md", "_archive/_index.md"]) {
+    const target = path.join(ROOT, file);
+    try {
+      await access(target);
+    } catch {
+      await writeFile(target, file === "_index.md" ? "# Memory Index\n\n" : "# Archive Index\n\n", "utf8");
+    }
+  }
+}
+
+async function listMarkdown(dir) {
+  let out = [];
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return out;
+  }
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      out = out.concat(await listMarkdown(full));
+    } else if (entry.isFile() && entry.name.endsWith(".md")) {
+      out.push(full);
+    }
+  }
+  return out;
+}
+
+function frontmatterDate(content) {
+  const m = content.match(/^\uFEFF?---\n([\s\S]*?)\n---/);
+  if (!m) return null;
+  const updated = m[1].match(/^(?:updated|verified):\s*(\d{4}-\d{2}-\d{2})/m);
+  if (updated) return updated[1];
+  return null;
+}
+
+function legacyDate(content) {
+  const m = content.match(/^>\s*(?:last_verified|source_date):\s*(\d{4}-\d{2}-\d{2})/m);
+  return m ? m[1] : null;
+}
+
+async function fileDate(file) {
+  const content = await readFile(file, "utf8");
+  const fm = frontmatterDate(content) ?? legacyDate(content);
+  if (fm) return fm;
+  const st = await stat(file);
+  return st.mtime.toISOString().slice(0, 10);
+}
+
+// ---------------- commands ----------------
+
+async function cmdUpgrade({ yes }) {
+  const missing = [];
+  const real = await realRoot();
+  for (const dir of ["_core", "projects", "notes", "_archive", "_archive/_trash"]) {
+    const target = path.join(real, dir);
+    try {
+      await access(target);
+    } catch {
+      missing.push(dir);
+    }
+  }
+  for (const file of ["_index.md", "_archive/_index.md"]) {
+    const target = path.join(real, file);
+    try {
+      await access(target);
+    } catch {
+      missing.push(file);
+    }
+  }
+  if (missing.length === 0) {
+    console.log("Lifecycle structure is already complete.");
+    return;
+  }
+  console.log(`Upgrade would create the following missing paths:\n${missing.map((p) => `  - ${p}`).join("\n")}`);
+  if (!yes) {
+    console.log("\nRe-run with --yes to apply. Active memory is never moved, rewritten, or deleted.");
+    return;
+  }
+  await ensureLifecycle();
+  console.log(`\nCreated: ${missing.join(", ")}`);
+}
+
+async function cmdStatus() {
+  const real = await realRoot();
+  try {
+    await access(path.join(real, "_index.md"));
+  } catch {
+    console.log("Memory root not initialized. Run `memory upgrade` first.");
+    return;
+  }
+  const index = await readIndex();
+  const routes = indexLines(index);
+  const active = [];
+  for (const line of routes) {
+    const m = line.trim().match(/^-\s+(\S+?)\s+—\s+(.*)$/);
+    active.push({ path: m?.[1] ?? line.trim().slice(2), summary: m?.[2] ?? "" });
+  }
+  const core = await listMarkdown(path.join(real, "_core"));
+  console.log(`Core files: ${core.length}`);
+  console.log(`Active routes: ${active.length}`);
+  for (const route of active) {
+    let size = null;
+    try {
+      size = (await stat(path.join(real, route.path))).size;
+    } catch {}
+    const sizeText = size === null ? "missing" : `${size} bytes`;
+    console.log(`  - ${route.path} (${sizeText}) ${route.summary ? `— ${route.summary}` : ""}`);
+  }
+}
+
+async function cmdValidate(raw) {
+  const rel = assertUserRel(raw);
+  const abs = await resolveContained(rel);
+  await mustExist(abs);
+  const zone = rel.split("/")[0];
+  const active = ACTIVE_ZONES.includes(zone);
+  console.log(JSON.stringify({ ok: true, relativePath: rel, resolved: abs, activeZone: active }));
+}
+
+async function cmdArchive(raw, { yes, reason }) {
+  const rel = assertUserRel(raw);
+  const real = await realRoot();
+  const abs = await resolveContained(rel);
+  await mustExist(abs);
+  const zone = rel.split("/")[0];
+  if (!ACTIVE_ZONES.includes(zone)) {
+    throw new Error(`only paths under ${ACTIVE_ZONES.join("/")} can be archived: ${rel}`);
+  }
+  const dest = await resolveContained(`_archive/${rel}`);
+  try {
+    await access(dest);
+    throw new Error(`destination collision, refusing to overwrite: _archive/${rel}`);
+  } catch (err) {
+    if (err.message.includes("collision")) throw err;
+  }
+  const index = await readIndex();
+  const route = activeIndexLine(index, rel) ?? "(no active index line)";
+  const archiveText = await readArchiveIndex();
+  const { parsed, block } = findArchiveBlock(archiveText, rel);
+  if (block) throw new Error(`archive index already has a record for ${rel}`);
+
+  const destRel = `_archive/${rel}`;
+  console.log(`Archive plan for ${rel}:`);
+  console.log(`  from:  ${rel}`);
+  console.log(`  to:    ${destRel}`);
+  console.log(`  index: remove its active route${route.startsWith("- ") ? "" : " (none found)"}`);
+  console.log(`  record: append archive entry with reason "${reason}"`);
+  if (!yes) {
+    console.log("\nRe-run with --yes to apply.");
+    return;
+  }
+
+  await mkdir(path.dirname(dest), { recursive: true });
+  await rename(abs, dest);
+  try {
+    const newIndex = removeRoutes(index, rel);
+    await atomicWrite(path.join(real, "_index.md"), newIndex);
+    const next = serializeArchiveIndex({ preamble: parsed.preamble, blocks: [...parsed.blocks, {
+      heading: rel,
+      body: [
+        `- original_path: ${rel}`,
+        `- state: archived`,
+        `- archived_at: ${today()}`,
+        `- reason: ${reason}`,
+        `- active_index_line: ${route}`,
+      ],
+    }] });
+    await atomicWrite(path.join(real, "_archive", "_index.md"), next);
+  } catch (err) {
+    await rename(dest, abs).catch(() => {});
+    throw new Error(`archive partially failed and was rolled back: ${err.message}`);
+  }
+  console.log(`Archived to ${destRel}.`);
+}
+
+async function cmdDelete(raw, { yes }) {
+  const rel = assertUserRel(raw);
+  const real = await realRoot();
+  const archivedRel = `_archive/${rel}`;
+  const source = await resolveContained(archivedRel);
+  await mustExist(source);
+  const dest = await resolveContained(`_archive/_trash/${rel}`);
+  try {
+    await access(dest);
+    throw new Error(`destination collision, refusing to overwrite: _archive/_trash/${rel}`);
+  } catch (err) {
+    if (err.message.includes("collision")) throw err;
+  }
+  const archiveText = await readArchiveIndex();
+  const { parsed, index, block } = findArchiveBlock(archiveText, rel);
+  if (!block) throw new Error(`no archive record for ${rel}; archive it first with \`memory archive\``);
+
+  const deadline = addDays(today(), 30);
+  console.log(`Delete plan for ${rel} (already archived):`);
+  console.log(`  from:      _archive/${rel}`);
+  console.log(`  to:        _archive/_trash/${rel}`);
+  console.log(`  deadline:  ${deadline} (30 days)`);
+  if (!yes) {
+    console.log("\nRe-run with --yes to apply.");
+    return;
+  }
+
+  await mkdir(path.dirname(dest), { recursive: true });
+  await rename(source, dest);
+  try {
+    const updatedBlock = {
+      heading: block.heading,
+      body: [
+        ...block.body.filter((l) => !l.startsWith("- state: ")),
+        `- state: trashed`,
+        `- deleted_at: ${today()}`,
+        `- recover_deadline: ${deadline}`,
+      ],
+    };
+    const blocks = parsed.blocks.slice();
+    blocks[index] = updatedBlock;
+    await atomicWrite(path.join(real, "_archive", "_index.md"), serializeArchiveIndex({ preamble: parsed.preamble, blocks }));
+  } catch (err) {
+    await rename(dest, source).catch(() => {});
+    throw new Error(`delete partially failed and was rolled back: ${err.message}`);
+  }
+  console.log(`Moved to trash; recover until ${deadline}.`);
+}
+
+async function cmdRecover(raw, { yes }) {
+  const rel = assertUserRel(raw);
+  const real = await realRoot();
+  const archiveText = await readArchiveIndex();
+  const { parsed, index, block } = findArchiveBlock(archiveText, rel);
+  if (!block) throw new Error(`no archive record for ${rel}`);
+
+  const state = field(block, "state") ?? "archived";
+  const sourceRel = state === "trashed" ? `_archive/_trash/${rel}` : `_archive/${rel}`;
+  const source = await resolveContained(sourceRel);
+  await mustExist(source);
+
+  const dest = await resolveContained(rel);
+  try {
+    await access(dest);
+    throw new Error(`destination collision, refusing to overwrite: ${rel}`);
+  } catch (err) {
+    if (err.message.includes("collision")) throw err;
+  }
+  const savedRoute = field(block, "active_index_line");
+  if (!savedRoute || savedRoute === "(no active index line)") {
+    throw new Error(`archive record for ${rel} lacks a stored active index line; resolve manually before recovering`);
+  }
+
+  console.log(`Recover plan for ${rel}:`);
+  console.log(`  from:  ${sourceRel}`);
+  console.log(`  to:    ${rel}`);
+  console.log(`  index: restore "${savedRoute.trim()}"`);
+  if (!yes) {
+    console.log("\nRe-run with --yes to apply.");
+    return;
+  }
+
+  await mkdir(path.dirname(dest), { recursive: true });
+  await rename(source, dest);
+  try {
+    const indexText = await readIndex();
+    const restored = indexText.includes(savedRoute.trim())
+      ? indexText
+      : `${indexText.trimEnd()}\n${savedRoute.trim()}\n`;
+    await atomicWrite(path.join(real, "_index.md"), restoreIndexFormat(restored));
+    const blocks = parsed.blocks.filter((_, i) => i !== index);
+    await atomicWrite(path.join(real, "_archive", "_index.md"), serializeArchiveIndex({ preamble: parsed.preamble, blocks }));
+  } catch (err) {
+    await rename(dest, source).catch(() => {});
+    throw new Error(`recover partially failed and was rolled back: ${err.message}`);
+  }
+  console.log(`Restored to ${rel}.`);
+}
+
+function restoreIndexFormat(text) {
+  const lines = text.split("\n");
+  while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
+  return lines.join("\n") + "\n";
+}
+
+async function cmdHealth({ maxAgeDays }) {
+  const real = await realRoot();
+  const candidates = [];
+  const cutoff = addDays(today(), -maxAgeDays);
+  for (const zone of ACTIVE_ZONES) {
+    for (const file of await listMarkdown(path.join(real, zone))) {
+      const date = await fileDate(file);
+      const rel = path.relative(real, file).split(path.sep).join("/");
+      if (date < cutoff) candidates.push({ path: rel, last: date });
+    }
+  }
+  const archiveText = await readArchiveIndex();
+  const expired = parseArchiveIndex(archiveText).blocks.filter((b) => {
+    const deadline = field(b, "recover_deadline");
+    return deadline && deadline < today();
+  }).map((b) => b.heading);
+
+  console.log("Health candidates (no changes made):");
+  console.log(`\nInactive active files (older than ${cutoff}):`);
+  if (candidates.length === 0) console.log("  (none)");
+  for (const c of candidates) console.log(`  - ${c.path} (last ${c.last})`);
+  console.log("\nExpired trash items (ready for permanent removal after confirmation):");
+  if (expired.length === 0) console.log("  (none)");
+  for (const e of expired) console.log(`  - ${e}`);
+}
+
+// ---------------- main ----------------
+
+async function main(argv) {
+  const [command, ...rest] = argv;
+  if (!command || command === "--help" || command === "-h") {
+    console.log(usage());
+    return;
+  }
+  let yes = false;
+  let reason = "(none)";
+  let maxAgeDays = 90;
+  const args = [];
+  for (let i = 0; i < rest.length; i++) {
+    const a = rest[i];
+    if (a === "--yes") {
+      yes = true;
+    } else if (a === "--reason") {
+      reason = rest[i + 1] ?? "(none)";
+      i += 1;
+    } else if (a === "--max-age-days") {
+      maxAgeDays = Number(rest[i + 1] ?? 90);
+      i += 1;
+    } else {
+      args.push(a);
+    }
+  }
+
+  try {
+    switch (command) {
+      case "upgrade":
+        await cmdUpgrade({ yes });
+        break;
+      case "status":
+        await cmdStatus();
+        break;
+      case "validate":
+        await cmdValidate(args[0]);
+        break;
+      case "archive":
+        if (!args[0]) throw new Error("archive requires a relative path");
+        await cmdArchive(args[0], { yes, reason });
+        break;
+      case "delete":
+        if (!args[0]) throw new Error("delete requires a relative path");
+        await cmdDelete(args[0], { yes });
+        break;
+      case "recover":
+        if (!args[0]) throw new Error("recover requires a relative path");
+        await cmdRecover(args[0], { yes });
+        break;
+      case "health":
+        await cmdHealth({ maxAgeDays });
+        break;
+      default:
+        console.error(`Unknown command: ${command}\n\n${usage()}`);
+        process.exitCode = 2;
+    }
+  } catch (err) {
+    console.error(`memory: ${err.message}`);
+    process.exitCode = 1;
+  }
+}
+
+main(process.argv.slice(2));
