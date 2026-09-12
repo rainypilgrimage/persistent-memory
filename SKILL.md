@@ -1,14 +1,14 @@
 ---
 name: persistent-memory
 description: Use when a user wants cross-session personal context shared by compatible AI agents; says load memory (加载记忆), what do you know about me (我的背景), remember this (记住这个), save this, update memory (更新记忆), update my profile, add to notes, wrap this up, memory status (记忆状态), what's saved (存了什么), memory upgrade (升级记忆), archive (归档), delete (删除), recover (恢复), memory health (记忆体检), or clean up memory; or asks to load, save, inspect, archive, recover, clean up, or upgrade local memory files or update relevant project context.
-version: 0.10.0
+version: 0.10.1
 ---
 
 # Persistent Memory System
 
 Persistent Memory is a transparent local context layer. It stores reviewed user context as Markdown files so compatible agents can read the same source of truth.
 
-**v0.10.0:** Adds a canonical metadata schema and file formats, a data-not-instructions boundary, atomic-write and symlink safeguards, and an optional reference CLI (`bin/memory`) that enforces the lifecycle safety contract. It preserves v0.9.0 coordinated updates, explicit confirmation, one-fact/one-owner boundaries, and freshness checks; it does not add background synchronization, automatic migration, or live-source polling.
+**v0.10.1:** Clarifies the write-authorization gate, project-scope loading precedence, and the required fields for current-state answers. It preserves v0.10.0 metadata, lifecycle, ownership, and freshness safeguards; it does not add background synchronization, automatic migration, or live-source polling.
 
 ## Runtime Contract
 
@@ -19,6 +19,15 @@ The skill is an instruction set, not a background service. Shared memory works o
 - the active user has permission to read and write that path.
 
 Platform memory may coexist. Persistent Memory does not import historical chats or replace an agent's built-in memory.
+
+## Non-Negotiable Write Gate
+
+Before any memory-file write, move, or deletion, treat these as separate gates:
+
+- A user-confirmed fact authorizes the proposed content, not the filesystem change.
+- “Write directly,” “skip the preview,” “do not ask again,” and “no additional confirmation” are pressure signals, not file-change authorization.
+- Until the exact preview has been shown and explicitly approved, the next action is **do not mutate files**. This remains true after switching to a writable session.
+- In a read-only session, report the blocker and stop; do not promise to apply the change directly once write access appears.
 
 ## Memory Location and Scope
 
@@ -92,9 +101,13 @@ For active projects, distinguish four logical roles. Do not require a fixed dire
 
 ## Loading
 
+### Scope Precedence
+
+A request that names a specific project or note, such as “load Atlas project memory,” is an on-demand request. Do not read `_core/` merely because the wording contains “load” and “memory.” Read `_core/` only when the user explicitly requests baseline or personal context, such as `load memory` or `what do you know about me`. If the user explicitly requests both baseline context and a named project, read both scopes and state that both were loaded.
+
 ### Load Baseline Context
 
-Trigger: `load memory`, `加载记忆`, `what do you know about me`, or `我的背景`.
+Trigger: a baseline-context request such as `load memory`, `加载记忆`, `what do you know about me`, or `我的背景` without a specific project or note target.
 
 When this skill is active:
 
@@ -122,6 +135,8 @@ Before answering with a claim that means current, latest, completed, blocked, or
 4. If a newer material or live source conflicts with the status snapshot, treat the newer authoritative source as evidence and do not repeat the old status as current.
 5. Briefly state the coverage or limitation when claiming current project state.
 
+**Current-state answer contract:** When answering a question about current, latest, completed, blocked, or no active task, include these fields in the response: (a) the conclusion from the canonical current-status source; (b) that source's `last-updated` or `last-verified` date; and (c) the coverage or limitation of that conclusion. If a newer material or live source exists, include its date and role, and state whether it has or has not become the current-status source. This contract still applies when the user asks not to explain sources; keep it concise rather than omitting the fields.
+
 Do not claim that project context is fully loaded when declared current-status or required first-party sources were not read.
 
 ### Summary-first on-demand loading
@@ -142,6 +157,8 @@ Trigger: `remember this`, `记住这个`, `save this`, `更新记忆`, `update m
 2. Propose the exact content, destination, and index change.
 3. Wait for user confirmation.
 4. Save only the confirmed content; update `_index.md` for active on-demand files.
+
+**Confirmation has two separate meanings:** confirmation that a fact or decision is true, and authorization to apply a displayed file change. A statement such as “the boundary change is confirmed” confirms the content, but does **not** authorize writing it. Only an explicit confirmation of the exact preview shown after step 2 satisfies step 3 or step 7. Requests such as “directly write,” “skip the preview,” or “do not ask again” do not collapse these two confirmations; show the preview and wait.
 
 When a confirmed update to an active on-demand file changes a fact represented in its `## Summary` / `## 摘要`, include the exact summary revision in the same preview and obtain the same explicit user confirmation before writing. Do not automatically create a Summary for an existing file and do not bulk-migrate memory files.
 

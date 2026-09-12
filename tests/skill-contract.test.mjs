@@ -23,11 +23,22 @@ function assertRequirements(content, requirements, label) {
 
 test("English skill defines project context ownership, freshness, and coordinated updates", async () => {
   const skill = await readRepoFile("SKILL.md");
-  assert.match(skill, /\*\*v0\.10\.0:\*\*/);
+  assert.match(skill, /\*\*v0\.10\.1:\*\*/);
   const ownership = section(skill, "Project Context Ownership");
+  const loading = section(skill, "Loading");
   const freshness = section(skill, "Freshness Gate", 3);
   const saving = section(skill, "Saving");
   const coreRules = section(skill, "Core Rules");
+  const writeGate = section(skill, "Non-Negotiable Write Gate");
+
+  assertRequirements(writeGate, [
+    ["fact confirmation is not filesystem authorization", /A user-confirmed fact authorizes the proposed content, not the filesystem change\./],
+    ["pressure cannot bypass the write gate", /“Write directly,”.*pressure signals, not file-change authorization\./],
+    ["exact preview blocks mutation", /Until the exact preview has been shown and explicitly approved.*do not mutate files/is],
+    ["read-only sessions do not promise later mutation", /In a read-only session.*do not promise to apply the change directly/is],
+  ], "English write gate");
+  assert.match(loading, /### Scope Precedence/);
+  assert.match(loading, /specific project or note.*on-demand.*Do not read `_core\//is);
 
   assertRequirements(ownership, [
     ["stable-memory role", /\*\*Stable memory:\*\*.*reviewed background.*decisions.*constraints.*durable results/is],
@@ -44,6 +55,7 @@ test("English skill defines project context ownership, freshness, and coordinate
     ["declared first-party/live source check", /Check declared first-party or live sources when the task depends on real-time facts/i],
     ["newer authoritative source precedence", /newer material or live source conflicts.*treat the newer authoritative source as evidence.*do not repeat the old status as current/is],
     ["coverage or limitation disclosure", /state the coverage or limitation when claiming current project state/i],
+    ["current-state answer contract", /\*\*Current-state answer contract:\*\*.*`last-updated` or `last-verified`.*coverage or limitation/is],
     ["incomplete-source coverage limit", /Do not claim that project context is fully loaded when declared current-status or required first-party sources were not read/i],
   ], "English Freshness Gate");
   assertRequirements(saving, [
@@ -58,6 +70,7 @@ test("English skill defines project context ownership, freshness, and coordinate
     ["single confirmation before writing", /Request one confirmation for the complete non-destructive write set/is],
     ["targeted questions only for unresolved ownership", /Ask a targeted question only when facts conflict, ownership is ambiguous, or a new source's authority cannot be determined/is],
     ["optional narrow overrides", /Only update stable memory.*only update status.*only register materials/is],
+    ["fact confirmation is separate from write authorization", /Confirmation has two separate meanings.*not\*\* authorize writing.*Only an explicit confirmation of the exact preview/is],
     ["no automatic background synchronization", /does not add background scanning, live polling, bulk migration, destructive lifecycle actions, or unconfirmed writes/is],
     ["no duplicate status or volatile index facts", /Do not create duplicate current-status sources or copy volatile facts into `_index\.md`/i],
   ], "English Saving section");
@@ -74,11 +87,22 @@ test("English skill defines project context ownership, freshness, and coordinate
 
 test("Chinese skill defines equivalent ownership, freshness, and coordinated updates", async () => {
   const skill = await readRepoFile("SKILL_zh.md");
-  assert.match(skill, /\*\*v0\.10\.0：\*\*/);
+  assert.match(skill, /\*\*v0\.10\.1：\*\*/);
   const ownership = section(skill, "项目上下文所有权");
+  const loading = section(skill, "加载");
   const freshness = section(skill, "新鲜度闸门", 3);
   const saving = section(skill, "保存");
   const coreRules = section(skill, "核心规则");
+  const writeGate = section(skill, "不可绕过的写入门禁");
+
+  assertRequirements(writeGate, [
+    ["事实确认不等于文件授权", /用户确认事实，只授权拟保存的内容，不授权文件系统变更。/],
+    ["压力不能绕过写入门禁", /“直接写入”.*压力信号，不是文件变更授权。/],
+    ["准确预览前不得修改", /在展示准确预览并获得明确批准之前.*不修改文件/is],
+    ["只读会话不得承诺稍后直接修改", /在只读会话中.*不得承诺一旦获得写权限就直接应用变更/is],
+  ], "中文写入门禁");
+  assert.match(loading, /### 范围优先级/);
+  assert.match(loading, /明确指定项目或笔记.*按需加载.*不要因此读取 `_core\//s);
 
   assertRequirements(ownership, [
     ["稳定记忆角色", /\*\*稳定记忆：\*\*.*已确认的背景、决策、约束、持久结果与经验边界/s],
@@ -95,6 +119,7 @@ test("Chinese skill defines equivalent ownership, freshness, and coordinated upd
     ["核对已声明一手或实时来源", /核对已声明的一手来源或实时来源/],
     ["较新权威来源优先", /更新更晚的材料或实时来源与状态快照冲突，以较新且更权威的来源作为证据，不得继续把旧状态写成当前事实/s],
     ["说明覆盖或限制", /简要说明已覆盖的来源或仍存在的限制/],
+    ["当前状态回答合同", /\*\*当前状态回答合同：\*\*.*`last-updated`.*`last-verified`.*覆盖.*限制/s],
     ["来源未读时的覆盖限制", /没有读取已声明的当前状态源或必要一手来源时，不得声称项目上下文已经完整加载/],
   ], "中文新鲜度闸门");
   assertRequirements(saving, [
@@ -109,6 +134,7 @@ test("Chinese skill defines equivalent ownership, freshness, and coordinated upd
     ["一次确认", /针对完整的非破坏性写入集合只请求一次确认/],
     ["仅在无法裁决时定向提问", /只有在事实冲突、所有权不明确或无法判断新来源的权威性时，才提出一个针对性问题/],
     ["可选精确范围", /只更新稳定记忆.*只更新状态.*只登记材料/s],
+    ["事实确认与写入授权分离", /确认有两种不同含义.*不等于授权写入.*准确预览后.*明确确认/s],
     ["不做后台自动同步", /不会引入后台扫描、实时轮询、批量迁移、破坏性生命周期操作或未经确认的写入/],
     ["不重复状态、不写易变索引", /不得创建重复的当前状态源，也不得把易变事实复制进 `_index\.md`/],
   ], "中文保存章节");
@@ -125,8 +151,8 @@ test("Chinese skill defines equivalent ownership, freshness, and coordinated upd
 test("READMEs explain coordinated updates without promising automatic synchronization", async () => {
   const english = await readRepoFile("README.md");
   const chinese = await readRepoFile("README_zh.md");
-  assert.match(english, /v0\.10\.0/);
-  assert.match(chinese, /v0\.10\.0/);
+  assert.match(english, /v0\.10\.1/);
+  assert.match(chinese, /v0\.10\.1/);
   assert.match(english, /update memory.*coordinated project-context update/is);
   assert.match(english, /one consolidated preview.*one confirmation/is);
   assert.match(english, /If nothing remains after filtering.*no confirmation/i);
@@ -149,7 +175,7 @@ test("READMEs assign only stable reviewed project background to memory", async (
 
 test("English skill defines metadata formats, data boundary, and hardened lifecycle", async () => {
   const skill = await readRepoFile("SKILL.md");
-  assert.match(skill, /^version: 0\.10\.0$/m);
+  assert.match(skill, /^version: 0\.10\.1$/m);
   const metadata = section(skill, "File Metadata and Formats");
   assert.match(metadata, /YAML frontmatter/);
   assert.match(metadata, /`role: current-status`/);
@@ -165,7 +191,7 @@ test("English skill defines metadata formats, data boundary, and hardened lifecy
 
 test("Chinese skill defines equivalent metadata, data boundary, and hardened lifecycle", async () => {
   const skill = await readRepoFile("SKILL_zh.md");
-  assert.match(skill, /^version: 0\.10\.0$/m);
+  assert.match(skill, /^version: 0\.10\.1$/m);
   const metadata = section(skill, "文件元数据与格式");
   assert.match(metadata, /YAML frontmatter/);
   assert.match(metadata, /`role: current-status`/);
