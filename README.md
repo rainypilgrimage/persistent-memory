@@ -132,7 +132,7 @@ All memory is stored as local Markdown files. Do not put passwords, API keys, or
 
 ## Release Status
 
-v0.10.0 adds a canonical metadata schema and file formats, a data-not-instructions boundary, atomic-write and symlink safeguards, and an optional reference CLI (`bin/memory`). It preserves v0.9.0 coordinated updates and v0.8.1 ownership and freshness safeguards, and does not add background synchronization, scanning or polling, automatic migration, or bulk migration.
+v0.10.1 clarifies the distinction between confirming memory content and authorizing a filesystem change, makes project/note scope take precedence over baseline loading, and requires current-state answers to include the status source's date and coverage limits. It preserves v0.10.0 metadata, lifecycle, ownership, and freshness safeguards, and does not add background synchronization, scanning or polling, automatic migration, or bulk migration.
 
 ## License
 

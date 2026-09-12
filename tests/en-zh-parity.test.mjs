@@ -24,8 +24,8 @@ test("English and Chinese skill files stay structurally in sync", async () => {
   const en = await read("SKILL.md");
   const zh = await read("SKILL_zh.md");
 
-  assert.match(en, /^version: 0\.10\.0$/m);
-  assert.match(zh, /^version: 0\.10\.0$/m);
+  assert.match(en, /^version: 0\.10\.1$/m);
+  assert.match(zh, /^version: 0\.10\.1$/m);
   assert.match(en, /^description: Use when /m);
   assert.match(zh, /^description: Use when /m);
 
